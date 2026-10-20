@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 
 import { API_BASE } from "@/lib/api";
 import { clearSession, getToken } from "@/lib/auth";
@@ -82,6 +83,22 @@ export default function LoginContent({ defaultNext }: { defaultNext?: string }) 
   return (
     <main className="min-h-screen pt-20 pb-16">
       <div className="max-w-md mx-auto px-4 fade-in">
+        <div style={{ display: "flex", justifyContent: "center", marginBottom: "1rem" }}>
+          <Link href="/">
+            <img
+              src="/logo.png"
+              alt="Logo Gowes Gaskeun"
+              width={64}
+              height={64}
+              style={{
+                borderRadius: "50%",
+                border: "2px solid rgba(0, 232, 123, 0.4)",
+                boxShadow: "0 0 20px rgba(0, 232, 123, 0.2)",
+                objectFit: "cover",
+              }}
+            />
+          </Link>
+        </div>
         <h1 className="heading-display text-3xl mb-8 text-center">Masuk</h1>
 
         <form onSubmit={handleSubmit} className="glass-panel-lg p-6 space-y-4">

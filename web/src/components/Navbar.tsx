@@ -75,6 +75,20 @@ export default function Navbar() {
   return (
     <>
       <nav className="navbar-glass">
+        <Link
+          href="/"
+          className="nav-link"
+          style={{ padding: "0.25rem 0.5rem", display: "flex", alignItems: "center" }}
+          aria-label="Beranda"
+        >
+          <img
+            src="/logo.png"
+            alt="Logo"
+            width={26}
+            height={26}
+            style={{ borderRadius: "50%", objectFit: "cover", flexShrink: 0 }}
+          />
+        </Link>
         {NAV_ITEMS.map((item) => {
           const isActive = pathname === item.href || (item.href !== "/" && pathname?.startsWith(item.href));
           return (

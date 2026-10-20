@@ -17,6 +17,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Gowes Gaskeun — Critical Mass Makassar",
   description: "Komunitas pesepeda Makassar. Bergerak Bersama, Merayakan Kota.",
+  icons: {
+    icon: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

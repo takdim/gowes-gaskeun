@@ -93,9 +93,25 @@ export default function HomePage() {
             </div>
           )}
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 mb-8 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
+          <div className="inline-flex items-center gap-2 px-4 py-2 mb-6 rounded-full" style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)" }}>
             <span className="badge-live">Rutin</span>
             <span style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem" }}>Jumat terakhir setiap bulan</span>
+          </div>
+
+          {/* Logo Brand */}
+          <div className="flex justify-center mb-6">
+            <img
+              src="/logo.png"
+              alt="Logo Gowes Gaskeun"
+              width={88}
+              height={88}
+              style={{
+                borderRadius: "50%",
+                border: "2px solid rgba(0, 232, 123, 0.35)",
+                boxShadow: "0 0 32px rgba(0, 232, 123, 0.2)",
+                objectFit: "cover",
+              }}
+            />
           </div>
 
           {/* Title */}
