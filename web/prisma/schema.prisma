@@ -1,0 +1,144 @@
+// This is your Prisma schema file.
+
+generator client {
+  provider = "prisma-client-js"
+  url      = env("DATABASE_URL")
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  displayName  String
+  avatarUrl    String?
+  role         Role     @default(USER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  attendances Attendance[]
+  livePositions LivePosition[]
+
+  @@index([email])
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Event {
+  id            String   @id @default(cuid())
+  title         String
+  tagline       String?
+  description   String?
+  startAt       DateTime
+  endAt         DateTime?
+  status        EventStatus @default(DRAFT)
+  isFeatured    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  locations     Location[]
+  tikums        Tikum[]
+  attendances   Attendance[]
+  livePositions LivePosition[]
+
+  @@index([status])
+  @@index([isFeatured])
+}
+
+enum EventStatus {
+  DRAFT
+  PUBLISHED
+  DONE
+}
+
+model Location {
+  id          String        @id @default(cuid())
+  eventId     String
+  type        LocationType
+  name        String
+  description String?
+  time        String?
+  lat         Float
+  lng         Float
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  event       Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, type])
+}
+
+enum LocationType {
+  START
+  FINISH
+}
+
+model Tikum {
+  id          String   @id @default(cuid())
+  eventId     String
+  name        String
+  lat         Float
+  lng         Float
+  meetTime    String?
+  quota       Int?
+  contact     String?
+  coordinatorUserId String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  attendees   Attendance[]
+  coordinator User?    @relation("TikumCoordinator", fields: [coordinatorUserId], references: [id])
+
+  @@index([eventId])
+}
+
+model Attendance {
+  id         String          @id @default(cuid())
+  eventId    String
+  userId     String
+  tikumId    String?
+  status     AttendanceStatus @default(ATTENDING)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  event      Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tikum      Tikum?          @relation(fields: [tikumId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId, userId])
+  @@index([eventId, status])
+}
+
+enum AttendanceStatus {
+  ATTENDING
+  ON_THE_WAY
+  AT_TIKUM
+  FINISHED
+  CANCELLED
+}
+
+model LivePosition {
+  id         String   @id @default(cuid())
+  eventId    String
+  userId     String
+  lat        Float
+  lng        Float
+  speed      Float?
+  heading    Float?
+  accuracy   Float?
+  updatedAt  DateTime @default(now())
+
+  event      Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([eventId, updatedAt])
+  @@index([userId, eventId])
+}

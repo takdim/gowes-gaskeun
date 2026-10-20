@@ -1,0 +1,11 @@
+Flask==3.1.0
+flask-cors==5.0.1
+flask-socketio==5.5.1
+SQLAlchemy==2.0.36
+PyMySQL==1.1.1
+python-dotenv==1.0.1
+bcrypt==4.2.1
+
+# Optional for production async mode
+# gevent>=24.2.1
+# gevent-websocket>=0.10.1

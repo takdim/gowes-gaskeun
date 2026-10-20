@@ -1,0 +1,16 @@
+{
+  "name": "gowes-gaskeun",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Web Komunitas Pesepeda - Critical Mass Makassar",
+  "scripts": {
+    "dev:web": "cd web && npm run dev",
+    "dev:api": "cd backend && python app.py",
+    "dev": "concurrently \"npm run dev:web\" \"npm run dev:api\"",
+    "db:migrate": "cd web && npx prisma migrate dev",
+    "db:seed": "curl -X POST http://localhost:5001/api/dev/seed"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

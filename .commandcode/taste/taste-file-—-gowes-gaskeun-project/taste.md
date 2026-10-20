@@ -1,0 +1,17 @@
+# Taste File — Gowes Gaskeun Project
+- Prefers communicating in Indonesian. Confidence: 0.9
+- States tasks tersely (URL + short imperative phrase), expecting the agent to investigate the codebase/DB itself rather than asking for details. Confidence: 0.6
+- Displayed statistics/values must match actual data in the database ("sesuai yang ada pada db") — no hardcoded, mock, or semantically mismatched counters. Confidence: 0.7
+- Expects UI to stay in sync with the DB automatically (live/auto-refreshing counters) rather than a one-time load. Confidence: 0.6
+- Expects the whole admin panel to be DB-backed and end-to-end functional (real data in every tab, actions available via UI) — treats a feature that only exists as a backend endpoint, or a list that stays hardcoded/mock, as incomplete. Confidence: 0.65
+- Assumes data entered through the admin UI propagates to the public site immediately, and reports a stale public view as "belum konek db" rather than as a caching/featured-flag issue. Confidence: 0.5
+- When offered multiple improvement options, picks all of them and favors the full implementation (backend endpoint + admin UI) over backend-only or partial work. Confidence: 0.55
+- Expects role-based access boundaries to be explicit and enforced: lower-privileged roles (e.g. TIKUM_COORDINATOR) get CRUD only over their own resources and must not be able to escalate (e.g. reassign the coordinator), while admins act on all. Confidence: 0.6
+- Dislikes long monolithic files; asks to split them into a modular, reusable "template" structure (e.g., breaking a big app.py into an app factory + per-domain modules) when a file grows too long. Confidence: 0.7
+- Cares about code being tidy/well-organized ("rapih"), treating structure and readability as goals in themselves, not just working behavior. Confidence: 0.55
+- Reports UI/visual problems by attaching a screenshot (plus the offending HTML/markup) and expects the agent to actually inspect the image ("lihat di image") before fixing. Confidence: 0.55
+- Attentive to layout correctness and responsive/mobile behavior: expects elements to be positioned where they belong on both desktop and mobile (e.g. a dropdown must attach to its trigger, and behavior must be right when the navbar moves to the bottom on small screens). Confidence: 0.6
+- Reports and expects fixes for discoverability/reachability problems on mobile (e.g. key controls like logout pushed off-screen and thus invisible), i.e. critical actions must remain visible and front-and-center on small screens. Confidence: 0.55
+- Expects UI fixes and features to apply to all user roles/users ("di semua user"), not just the single account/role being demonstrated. Confidence: 0.5
+- Values preserving already-working UI: reacts negatively ("jadi aneh sekarang") when a fix restructures working markup/layout and regresses the look, preferring minimal, non-invasive changes over refactors that alter the existing appearance. Confidence: 0.45
+- Wants background services/processes the agent starts cleaned up (explicitly asks to stop/kill them when done rather than leaving them running). Confidence: 0.5
