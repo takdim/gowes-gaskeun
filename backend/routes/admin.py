@@ -137,6 +137,46 @@ def api_admin_add_location(event_id):
         db.close()
 
 
+@admin_bp.route("/locations/<location_id>", methods=["PATCH"])
+@require_db
+@require_admin
+def api_admin_update_location(location_id):
+    """Admin: update Start/Finish location."""
+    data = request.get_json()
+    db = SessionLocal()
+    try:
+        loc = db.query(LocationModel).get(location_id)
+        if not loc:
+            return jsonify({"error": "Tidak ditemukan"}), 404
+
+        for key in ["type", "name", "description", "time", "lat", "lng"]:
+            if key in data:
+                setattr(loc, key, data[key])
+
+        db.commit()
+        return jsonify({"id": loc.id, "message": "Lokasi berhasil diupdate"})
+    finally:
+        db.close()
+
+
+@admin_bp.route("/locations/<location_id>", methods=["DELETE"])
+@require_db
+@require_admin
+def api_admin_delete_location(location_id):
+    """Admin: delete Start/Finish location."""
+    db = SessionLocal()
+    try:
+        loc = db.query(LocationModel).get(location_id)
+        if not loc:
+            return jsonify({"error": "Tidak ditemukan"}), 404
+
+        db.delete(loc)
+        db.commit()
+        return jsonify({"message": "Lokasi berhasil dihapus"})
+    finally:
+        db.close()
+
+
 # ── Tikums ──────────────────────────────────────────────
 @admin_bp.route("/events/<event_id>/tikums", methods=["POST"])
 @require_db

@@ -35,6 +35,8 @@ export default function AdminPage() {
   const [userId, setUserId] = useState<string>("");
   const [editingTikumId, setEditingTikumId] = useState<string | null>(null);
   const [tikumEdit, setTikumEdit] = useState({ name: "", meet_time: "", quota: "", contact: "", lat: "", lng: "" });
+  const [editingLocationId, setEditingLocationId] = useState<string | null>(null);
+  const [locationEdit, setLocationEdit] = useState({ type: "START", name: "", time: "", lat: "", lng: "" });
 
   // Auth + role check — run once on mount
   useEffect(() => {
@@ -131,6 +133,62 @@ export default function AdminPage() {
       loadEventData(selectedEventId);
       setMessage("Lokasi ditambahkan!");
     } catch { setMessage("Gagal menambahkan lokasi"); }
+  };
+
+  const startEditLocation = (l: any) => {
+    setEditingLocationId(l.id);
+    setLocationEdit({
+      type: l.type || "START",
+      name: l.name || "",
+      time: l.time || "",
+      lat: l.lat != null ? String(l.lat) : "",
+      lng: l.lng != null ? String(l.lng) : "",
+    });
+  };
+
+  const handleUpdateLocation = async (locationId: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/locations/${locationId}`, {
+        method: "PATCH",
+        headers: authHeaders(),
+        body: JSON.stringify({
+          type: locationEdit.type,
+          name: locationEdit.name,
+          time: locationEdit.time,
+          lat: parseFloat(locationEdit.lat),
+          lng: parseFloat(locationEdit.lng),
+        }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMessage(d.error || "Gagal memperbarui lokasi");
+        return;
+      }
+      setEditingLocationId(null);
+      loadEventData(selectedEventId);
+      setMessage("Lokasi diperbarui!");
+    } catch {
+      setMessage("Gagal memperbarui lokasi");
+    }
+  };
+
+  const handleDeleteLocation = async (locationId: string) => {
+    if (!window.confirm("Hapus lokasi ini?")) return;
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/locations/${locationId}`, {
+        method: "DELETE",
+        headers: authHeaders(),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        setMessage(d.error || "Gagal menghapus lokasi");
+        return;
+      }
+      loadEventData(selectedEventId);
+      setMessage("Lokasi dihapus!");
+    } catch {
+      setMessage("Gagal menghapus lokasi");
+    }
   };
 
   const handleAddTikum = async () => {
@@ -408,11 +466,92 @@ export default function AdminPage() {
               <h4 style={{ fontWeight: 600 }}>Data lokasi ({locations.length}):</h4>
               {locations.length === 0 && <p style={{ color: "var(--color-text-tertiary)", fontSize: "0.9rem" }}>Belum ada lokasi untuk event ini.</p>}
               {locations.map((l: any) => (
-                <div key={l.id} className="glass-panel p-4" style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
-                  <span>{l.type === "START" ? "🟣" : "🔴"}</span>
-                  <span style={{fontWeight:600}}>{l.type === "START" ? "Start" : "Finish"}: {l.name}</span>
-                  {l.time && <span style={{color:"var(--color-text-tertiary)",fontSize:"0.85rem"}}>{l.time}</span>}
-                  <span style={{color:"var(--color-text-tertiary)",fontSize:"0.85rem",marginLeft:"auto"}}>{l.lat}, {l.lng}</span>
+                <div key={l.id} className="glass-panel p-4">
+                  {editingLocationId === l.id ? (
+                    <div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                        <select
+                          value={locationEdit.type}
+                          onChange={(e) => setLocationEdit({ ...locationEdit, type: e.target.value })}
+                          className="input-glass"
+                        >
+                          <option value="START">Start</option>
+                          <option value="FINISH">Finish</option>
+                        </select>
+                        <input
+                          placeholder="Nama Lokasi *"
+                          value={locationEdit.name}
+                          onChange={(e) => setLocationEdit({ ...locationEdit, name: e.target.value })}
+                          className="input-glass"
+                        />
+                        <input
+                          placeholder="Jam (cth: 16:30)"
+                          value={locationEdit.time}
+                          onChange={(e) => setLocationEdit({ ...locationEdit, time: e.target.value })}
+                          className="input-glass"
+                        />
+                        <input
+                          placeholder="Latitude *"
+                          value={locationEdit.lat}
+                          onChange={(e) => setLocationEdit({ ...locationEdit, lat: e.target.value })}
+                          className="input-glass"
+                        />
+                        <input
+                          placeholder="Longitude *"
+                          value={locationEdit.lng}
+                          onChange={(e) => setLocationEdit({ ...locationEdit, lng: e.target.value })}
+                          className="input-glass"
+                        />
+                      </div>
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button
+                          onClick={() => handleUpdateLocation(l.id)}
+                          className="btn-glass-primary"
+                          style={{ padding: "0.35rem 0.9rem", fontSize: "0.8rem" }}
+                        >
+                          Simpan
+                        </button>
+                        <button
+                          onClick={() => setEditingLocationId(null)}
+                          className="btn-glass-secondary"
+                          style={{ padding: "0.35rem 0.9rem", fontSize: "0.8rem" }}
+                        >
+                          Batal
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+                      <span>{l.type === "START" ? "🟣" : "🔴"}</span>
+                      <span style={{ fontWeight: 600 }}>{l.type === "START" ? "Start" : "Finish"}: {l.name}</span>
+                      {l.time && <span style={{ color: "var(--color-text-tertiary)", fontSize: "0.85rem" }}>({l.time})</span>}
+                      <span style={{ color: "var(--color-text-tertiary)", fontSize: "0.85rem", marginLeft: "auto" }}>{l.lat}, {l.lng}</span>
+                      {isAdmin && (
+                        <div style={{ display: "flex", gap: "0.5rem", marginLeft: "0.5rem" }}>
+                          <button
+                            onClick={() => startEditLocation(l)}
+                            style={{
+                              padding: "0.25rem 0.75rem", borderRadius: "9999px", fontSize: "0.75rem",
+                              background: "rgba(167,139,250,0.15)", border: "1px solid rgba(167,139,250,0.3)",
+                              color: "#a78bfa", cursor: "pointer",
+                            }}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            onClick={() => handleDeleteLocation(l.id)}
+                            style={{
+                              padding: "0.25rem 0.75rem", borderRadius: "9999px", fontSize: "0.75rem",
+                              background: "rgba(244,63,94,0.15)", border: "1px solid rgba(244,63,94,0.3)",
+                              color: "#f43f5e", cursor: "pointer",
+                            }}
+                          >
+                            Hapus
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
