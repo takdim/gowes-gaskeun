@@ -42,8 +42,10 @@ def api_featured_event():
             ).count()
             tikums.append({
                 "id": t.id, "name": t.name, "lat": t.lat, "lng": t.lng,
-                "meet_time": t.meet_time, "quota": t.quota, "contact": t.contact,
-                "attendee_count": attendee_count
+                "meet_time": t.meet_time, "meetTime": t.meet_time,
+                "quota": t.quota, "contact": t.contact,
+                "attendee_count": attendee_count,
+                "attendeeCount": attendee_count
             })
 
         total_attending = db.query(AttendanceModel).filter(

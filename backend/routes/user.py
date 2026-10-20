@@ -29,13 +29,16 @@ def api_attendance():
 
         existing = db.query(AttendanceModel).filter_by(event_id=event_id, user_id=user_id).first()
         if existing:
-            return jsonify({"error": "Sudah terdaftar untuk event ini"}), 409
+            if "tikumId" in data:
+                existing.tikum_id = tikum_id
+                db.commit()
+            return jsonify({"id": existing.id, "status": existing.status, "tikumId": existing.tikum_id}), 200
 
         att = AttendanceModel(event_id=event_id, user_id=user_id, tikum_id=tikum_id)
         db.add(att)
         db.commit()
 
-        return jsonify({"id": att.id, "status": att.status}), 201
+        return jsonify({"id": att.id, "status": att.status, "tikumId": att.tikum_id}), 201
     finally:
         db.close()
 

@@ -273,7 +273,8 @@ export default function LiveMapPage() {
     if (event?.start) m.push({ lat: event.start.lat, lng: event.start.lng, label: `START: ${event.start.name}`, color: "#a78bfa" });
     if (event?.finish) m.push({ lat: event.finish.lat, lng: event.finish.lng, label: `FINISH: ${event.finish.name}`, color: "#f43f5e" });
     event?.tikums?.forEach((t: any) => {
-      m.push({ lat: t.lat, lng: t.lng, label: `${t.name} (${t.attendeeCount ?? 0})`, color: "#a78bfa" });
+      const count = t.attendeeCount ?? t.attendee_count ?? 0;
+      m.push({ lat: t.lat, lng: t.lng, label: `${t.name} (${count})`, color: "#a78bfa" });
     });
     const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
     const selfStoredName = typeof window !== "undefined" ? localStorage.getItem("displayName") : null;
