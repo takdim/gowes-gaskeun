@@ -28,6 +28,7 @@ export default function LiveMapPage() {
   const [status, setStatus] = useState<"IDLE" | "ON_THE_WAY" | "FINISHED">("IDLE");
   const [isConnected, setIsConnected] = useState(false);
   const [watchId, setWatchId] = useState<number | null>(null);
+  const watchRef = useRef<number | null>(null);
   const [errorMsg, setErrorMsg] = useState("");
   const socketRef = useRef<any>(null);
   const mapMarkersRef = useRef<L.Marker[]>([]);
@@ -95,6 +96,84 @@ export default function LiveMapPage() {
       .then((data) => setRiders(data.riders || []));
   }, [eventId]);
 
+  const sendPositionUpdate = (pos: GeolocationPosition, currentEventId: string) => {
+    const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    const selfName = (typeof window !== "undefined" ? localStorage.getItem("displayName") : null) || "Kamu";
+
+    setRiders((prev) => {
+      const idx = prev.findIndex((r) => r.userId === selfId);
+      const current: Rider = {
+        userId: selfId || "self",
+        displayName: selfName,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        speed: pos.coords.speed ?? undefined,
+        heading: pos.coords.heading ?? undefined,
+        accuracy: pos.coords.accuracy ?? undefined,
+        updatedAt: new Date().toISOString(),
+      };
+      if (idx >= 0) {
+        const updated = [...prev];
+        updated[idx] = { ...updated[idx], ...current };
+        return updated;
+      }
+      return [...prev, current];
+    });
+
+    fetch(`${API_BASE}/api/live/position`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${localStorage.getItem("token")}`,
+        "X-User-Id": localStorage.getItem("userId") || "",
+      },
+      body: JSON.stringify({
+        eventId: currentEventId,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        speed: pos.coords.speed,
+        heading: pos.coords.heading,
+        accuracy: pos.coords.accuracy,
+      }),
+    }).catch(console.error);
+  };
+
+  // Check user's current attendance status on page load/refresh
+  useEffect(() => {
+    if (!eventId) return;
+    const token = getToken();
+    const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    if (!token || !userId) return;
+
+    fetch(`${API_BASE}/api/me/attendance?event_id=${eventId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "X-User-Id": userId,
+      },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        const myAtt = data.attendances?.find((a: any) => a.eventId === eventId);
+        if (myAtt) {
+          if (myAtt.status === "ON_THE_WAY") {
+            setStatus("ON_THE_WAY");
+            if (navigator.geolocation && watchRef.current === null) {
+              const id = navigator.geolocation.watchPosition(
+                (pos) => sendPositionUpdate(pos, eventId),
+                () => {},
+                { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+              );
+              watchRef.current = id;
+              setWatchId(id);
+            }
+          } else if (myAtt.status === "FINISHED") {
+            setStatus("FINISHED");
+          }
+        }
+      })
+      .catch(console.error);
+  }, [eventId]);
+
   // Handle ON THE WAY
   const startTracking = async () => {
     if (!getToken()) {
@@ -107,11 +186,13 @@ export default function LiveMapPage() {
     }
 
     // Request permission first
-    const permission = await navigator.permissions.query({ name: "geolocation" as PermissionName });
-    if (permission.state === "denied") {
-      setErrorMsg("Izin lokasi ditolak. Aktifkan di pengaturan browser.");
-      return;
-    }
+    try {
+      const permission = await navigator.permissions.query({ name: "geolocation" as PermissionName });
+      if (permission.state === "denied") {
+        setErrorMsg("Izin lokasi ditolak. Aktifkan di pengaturan browser.");
+        return;
+      }
+    } catch {}
 
     try {
       // Start API tracking
@@ -134,67 +215,35 @@ export default function LiveMapPage() {
     }
 
     setStatus("ON_THE_WAY");
+    setErrorMsg("");
 
-    // Watch position
+    if (watchRef.current !== null) {
+      navigator.geolocation.clearWatch(watchRef.current);
+    }
+
     const id = navigator.geolocation.watchPosition(
-      (pos) => {
-        const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
-        const selfName = (typeof window !== "undefined" ? localStorage.getItem("displayName") : null) || "Kamu";
-
-        // Optimistically update riders list with self coordinates
-        setRiders((prev) => {
-          const idx = prev.findIndex((r) => r.userId === selfId);
-          const current: Rider = {
-            userId: selfId || "self",
-            displayName: selfName,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            speed: pos.coords.speed ?? undefined,
-            heading: pos.coords.heading ?? undefined,
-            accuracy: pos.coords.accuracy ?? undefined,
-            updatedAt: new Date().toISOString(),
-          };
-          if (idx >= 0) {
-            const updated = [...prev];
-            updated[idx] = { ...updated[idx], ...current };
-            return updated;
-          }
-          return [...prev, current];
-        });
-
-        // Send position
-        fetch(`${API_BASE}/api/live/position`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-            "X-User-Id": localStorage.getItem("userId") || "",
-          },
-          body: JSON.stringify({
-            eventId,
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            speed: pos.coords.speed,
-            heading: pos.coords.heading,
-            accuracy: pos.coords.accuracy,
-          }),
-        }).catch(console.error);
-      },
-      (err) => {
+      (pos) => sendPositionUpdate(pos, eventId),
+      () => {
         setErrorMsg("GPS tidak tersedia atau izin ditolak");
       },
       { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
     );
 
+    watchRef.current = id;
     setWatchId(id);
   };
 
   // Stop tracking
   const stopTracking = async () => {
-    if (watchId !== null) {
-      navigator.geolocation.clearWatch(watchId);
-      setWatchId(null);
+    if (watchRef.current !== null) {
+      navigator.geolocation.clearWatch(watchRef.current);
+      watchRef.current = null;
     }
+    setWatchId(null);
+    setStatus("FINISHED");
+
+    const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    setRiders((prev) => prev.filter((r) => r.userId !== selfId));
 
     try {
       await fetch(`${API_BASE}/api/live/stop`, {
@@ -206,12 +255,16 @@ export default function LiveMapPage() {
         },
         body: JSON.stringify({ eventId }),
       });
+
+      // Refetch riders from backend to make sure self is removed
+      const res = await fetch(`${API_BASE}/api/live/riders?event_id=${eventId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setRiders(data.riders || []);
+      }
     } catch {
       console.error("Failed to stop tracking");
     }
-
-    setStatus("FINISHED");
-    setRiders((prev) => prev.filter((r) => r.userId !== localStorage.getItem("userId")));
   };
 
   // Build markers for map
@@ -314,9 +367,14 @@ export default function LiveMapPage() {
                 🏁 FINISH
               </button>
             ) : (
-              <Link href="/dashboard" className="btn-glass-secondary" style={{ padding: "0.6rem 1.5rem", fontSize: "0.9rem" }}>
-                ← Dashboard
-              </Link>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                <button onClick={startTracking} className="btn-glass-primary" style={{ padding: "0.6rem 1rem", fontSize: "0.85rem" }}>
+                  🚲 MULAI LAGI
+                </button>
+                <Link href="/dashboard" className="btn-glass-secondary" style={{ padding: "0.6rem 1rem", fontSize: "0.85rem" }}>
+                  Dashboard
+                </Link>
+              </div>
             )}
           </div>
 

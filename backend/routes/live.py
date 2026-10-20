@@ -26,9 +26,10 @@ def api_live_start():
     try:
         att = db.query(AttendanceModel).filter_by(event_id=event_id, user_id=user_id).first()
         if not att:
-            return jsonify({"error": "Belum mendaftar"}), 400
-
-        att.status = "ON_THE_WAY"
+            att = AttendanceModel(event_id=event_id, user_id=user_id, status="ON_THE_WAY")
+            db.add(att)
+        else:
+            att.status = "ON_THE_WAY"
         db.commit()
 
         user = db.query(UserModel).filter_by(id=user_id).first()
@@ -58,6 +59,10 @@ def api_live_position():
 
     db = SessionLocal()
     try:
+        att = db.query(AttendanceModel).filter_by(event_id=event_id, user_id=user_id).first()
+        if att and att.status == "FINISHED":
+            return jsonify({"error": "Tracking sudah selesai"}), 400
+
         # Upsert position
         pos = db.query(LivePositionModel).filter_by(event_id=event_id, user_id=user_id).first()
         obj = {
@@ -109,9 +114,13 @@ def api_live_stop():
         att = db.query(AttendanceModel).filter_by(event_id=event_id, user_id=user_id).first()
         if att:
             att.status = "FINISHED"
-            db.commit()
+
+        # Hapus posisi live dari database agar tidak lagi muncul sebagai rider aktif
+        db.query(LivePositionModel).filter_by(event_id=event_id, user_id=user_id).delete()
+        db.commit()
 
         socketio.emit("user-left", {"userId": user_id}, room=f"event_{event_id}")
+        socketio.emit("user-status", {"userId": user_id, "status": "FINISHED"}, room=f"event_{event_id}")
 
         return jsonify({"message": "Tracking berhenti"})
     finally:
@@ -132,9 +141,11 @@ def api_live_riders():
         positions = (
             db.query(LivePositionModel, UserModel)
             .join(UserModel, LivePositionModel.user_id == UserModel.id)
+            .outerjoin(AttendanceModel, (AttendanceModel.event_id == LivePositionModel.event_id) & (AttendanceModel.user_id == UserModel.id))
             .filter(
                 LivePositionModel.event_id == event_id,
-                LivePositionModel.updated_at >= cutoff
+                LivePositionModel.updated_at >= cutoff,
+                (AttendanceModel.status == "ON_THE_WAY") | (AttendanceModel.status.is_(None))
             )
             .all()
         )
