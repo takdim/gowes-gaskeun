@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from flask import Blueprint, jsonify, request
 
 from extensions import SessionLocal
-from models import AttendanceModel, EventModel, LivePositionModel, LocationModel, TikumModel, UserModel
+from models import AttendanceModel, EventModel, LivePositionModel, LocationModel, TikumMemberModel, TikumModel, UserModel
 from utils import require_db
 
 public_bp = Blueprint("public", __name__, url_prefix="/api")
@@ -36,10 +36,12 @@ def api_featured_event():
         ]
         tikums = []
         for t in db.query(TikumModel).filter_by(event_id=event.id).all():
-            attendee_count = db.query(AttendanceModel).filter(
+            m_count = db.query(TikumMemberModel).filter_by(tikum_id=t.id).count()
+            att_count = db.query(AttendanceModel).filter(
                 AttendanceModel.tikum_id == t.id,
                 AttendanceModel.status.notin_(["CANCELLED"])
             ).count()
+            attendee_count = max(m_count, att_count)
             tikums.append({
                 "id": t.id, "name": t.name, "lat": t.lat, "lng": t.lng,
                 "meet_time": t.meet_time, "meetTime": t.meet_time,
@@ -117,10 +119,12 @@ def api_tikums_list():
         tikums = db.query(TikumModel).filter_by(event_id=event_id).all()
         result = []
         for t in tikums:
-            count = db.query(AttendanceModel).filter(
+            m_count = db.query(TikumMemberModel).filter_by(tikum_id=t.id).count()
+            att_count = db.query(AttendanceModel).filter(
                 AttendanceModel.tikum_id == t.id,
                 AttendanceModel.status.notin_(["CANCELLED"])
             ).count()
+            count = max(m_count, att_count)
             coord = db.query(UserModel).get(t.coordinator_user_id) if t.coordinator_user_id else None
             result.append({
                 "id": t.id, "name": t.name, "lat": t.lat, "lng": t.lng,

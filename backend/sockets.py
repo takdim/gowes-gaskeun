@@ -25,6 +25,18 @@ def register_socket_handlers(socketio):
         if event_id:
             leave_room(f"event_{event_id}")
 
+    @socketio.on("join-tikum-chat")
+    def handle_join_tikum_chat(data):
+        tikum_id = data.get("tikumId")
+        if tikum_id:
+            join_room(f"tikum_{tikum_id}")
+
+    @socketio.on("leave-tikum-chat")
+    def handle_leave_tikum_chat(data):
+        tikum_id = data.get("tikumId")
+        if tikum_id:
+            leave_room(f"tikum_{tikum_id}")
+
     @socketio.on_error
     def handle_error(e):
         print(f"WebSocket error: {e}")

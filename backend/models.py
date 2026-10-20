@@ -21,6 +21,8 @@ class UserModel(Base):
 
     attendances = relationship("AttendanceModel", back_populates="user", cascade="all, delete-orphan")
     live_positions = relationship("LivePositionModel", back_populates="user", cascade="all, delete-orphan")
+    tikum_memberships = relationship("TikumMemberModel", back_populates="user", cascade="all, delete-orphan")
+    tikum_messages = relationship("TikumMessageModel", back_populates="user", cascade="all, delete-orphan")
 
 
 class EventModel(Base):
@@ -40,6 +42,7 @@ class EventModel(Base):
     tikums = relationship("TikumModel", back_populates="event", cascade="all, delete-orphan")
     attendances = relationship("AttendanceModel", back_populates="event", cascade="all, delete-orphan")
     live_positions = relationship("LivePositionModel", back_populates="event", cascade="all, delete-orphan")
+    tikum_members = relationship("TikumMemberModel", back_populates="event", cascade="all, delete-orphan")
 
 
 class LocationModel(Base):
@@ -75,6 +78,8 @@ class TikumModel(Base):
     event = relationship("EventModel", back_populates="tikums")
     attendees = relationship("AttendanceModel", back_populates="tikum")
     coordinator = relationship("UserModel", foreign_keys=[coordinator_user_id], backref="coordinated_tikums")
+    members = relationship("TikumMemberModel", back_populates="tikum", cascade="all, delete-orphan")
+    messages = relationship("TikumMessageModel", back_populates="tikum", cascade="all, delete-orphan")
 
 
 class AttendanceModel(Base):
@@ -106,3 +111,29 @@ class LivePositionModel(Base):
 
     event = relationship("EventModel", back_populates="live_positions")
     user = relationship("UserModel", back_populates="live_positions")
+
+
+class TikumMemberModel(Base):
+    __tablename__ = "tikum_members"
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
+    event_id = Column(String(255), ForeignKey("events.id", ondelete="CASCADE"), nullable=False, index=True)
+    tikum_id = Column(String(255), ForeignKey("tikums.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    joined_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    event = relationship("EventModel", back_populates="tikum_members")
+    tikum = relationship("TikumModel", back_populates="members")
+    user = relationship("UserModel", back_populates="tikum_memberships")
+
+
+class TikumMessageModel(Base):
+    __tablename__ = "tikum_messages"
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tikum_id = Column(String(255), ForeignKey("tikums.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+    tikum = relationship("TikumModel", back_populates="messages")
+    user = relationship("UserModel", back_populates="tikum_messages")
+
