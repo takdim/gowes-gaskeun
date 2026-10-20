@@ -5,11 +5,17 @@ import Link from "next/link";
 import Navbar from "@/components/Navbar";
 import MapComponent from "@/components/MapComponent";
 import { API_BASE } from "@/lib/api";
+import { getToken } from "@/lib/auth";
 
 export default function HomePage() {
   const [data, setData] = useState<any>(null);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+
+  useEffect(() => {
+    setIsLoggedIn(Boolean(getToken()));
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -77,6 +83,7 @@ export default function HomePage() {
 
   return (
     <main className="min-h-screen pt-20 pb-16">
+      <Navbar />
       {/* Hero Section */}
       <section className="px-4 py-12 md:py-20 fade-in">
         <div className="max-w-4xl mx-auto text-center">
@@ -158,7 +165,11 @@ export default function HomePage() {
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row justify-center gap-3 mb-12">
-            <Link href="/login?next=/dashboard" className="btn-glass-primary" style={{ minWidth: "200px" }}>
+            <Link
+              href={isLoggedIn ? "/dashboard" : "/login?next=/dashboard"}
+              className="btn-glass-primary"
+              style={{ minWidth: "200px" }}
+            >
               🚲 I&apos;M ATTENDING
             </Link>
             <Link href="/live" className="btn-glass-secondary" style={{ minWidth: "200px" }}>

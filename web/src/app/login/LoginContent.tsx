@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { API_BASE } from "@/lib/api";
-import { clearSession } from "@/lib/auth";
+import { clearSession, getToken } from "@/lib/auth";
 
 export default function LoginContent({ defaultNext }: { defaultNext?: string }) {
   const router = useRouter();
@@ -20,6 +20,14 @@ export default function LoginContent({ defaultNext }: { defaultNext?: string }) 
   };
 
   const nextUrl = searchParams.get("next") || defaultNext;
+
+  useEffect(() => {
+    const token = getToken();
+    if (token) {
+      const role = (typeof window !== "undefined" ? localStorage.getItem("role") : null) || "USER";
+      router.replace(nextUrl || getUserRedirect(role));
+    }
+  }, [nextUrl, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
