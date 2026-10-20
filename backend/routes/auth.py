@@ -34,7 +34,16 @@ def api_register():
         db.add(user)
         db.commit()
 
-        return jsonify({"id": user.id, "email": user.email, "displayName": user.display_name}), 201
+        token = secrets.token_urlsafe(32)
+        response = jsonify({
+            "id": user.id,
+            "email": user.email,
+            "displayName": user.display_name,
+            "role": user.role,
+            "token": token
+        })
+        response.set_cookie("session_token", token, httponly=True, samesite="lax")
+        return response, 201
     finally:
         db.close()
 

@@ -31,8 +31,11 @@ def api_live_start():
         att.status = "ON_THE_WAY"
         db.commit()
 
+        user = db.query(UserModel).filter_by(id=user_id).first()
+        display_name = user.display_name if user else "Rider"
+
         # Emit broadcast
-        socketio.emit("user-status", {"userId": user_id, "status": "ON_THE_WAY"}, room=f"event_{event_id}")
+        socketio.emit("user-status", {"userId": user_id, "displayName": display_name, "status": "ON_THE_WAY"}, room=f"event_{event_id}")
 
         return jsonify({"message": "Tracking dimulai"})
     finally:
@@ -71,10 +74,19 @@ def api_live_position():
             db.add(pos)
         db.commit()
 
+        user = db.query(UserModel).filter_by(id=user_id).first()
+        display_name = user.display_name if user else "Rider"
+        avatar_url = user.avatar_url if user else None
+
         # Broadcast via WebSocket
         socketio.emit("position", {
-            "userId": user_id, "lat": lat, "lng": lng,
-            "speed": obj["speed"], "heading": obj["heading"],
+            "userId": user_id,
+            "displayName": display_name,
+            "avatarUrl": avatar_url,
+            "lat": lat,
+            "lng": lng,
+            "speed": obj["speed"],
+            "heading": obj["heading"],
             "accuracy": obj["accuracy"]
         }, room=f"event_{event_id}")
 

@@ -138,6 +138,30 @@ export default function LiveMapPage() {
     // Watch position
     const id = navigator.geolocation.watchPosition(
       (pos) => {
+        const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+        const selfName = (typeof window !== "undefined" ? localStorage.getItem("displayName") : null) || "Kamu";
+
+        // Optimistically update riders list with self coordinates
+        setRiders((prev) => {
+          const idx = prev.findIndex((r) => r.userId === selfId);
+          const current: Rider = {
+            userId: selfId || "self",
+            displayName: selfName,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            speed: pos.coords.speed ?? undefined,
+            heading: pos.coords.heading ?? undefined,
+            accuracy: pos.coords.accuracy ?? undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          if (idx >= 0) {
+            const updated = [...prev];
+            updated[idx] = { ...updated[idx], ...current };
+            return updated;
+          }
+          return [...prev, current];
+        });
+
         // Send position
         fetch(`${API_BASE}/api/live/position`, {
           method: "POST",
@@ -198,19 +222,30 @@ export default function LiveMapPage() {
     event?.tikums?.forEach((t: any) => {
       m.push({ lat: t.lat, lng: t.lng, label: `${t.name} (${t.attendeeCount ?? 0})`, color: "#a78bfa" });
     });
+    const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
+    const selfStoredName = typeof window !== "undefined" ? localStorage.getItem("displayName") : null;
+
     // Add rider markers - filter out self if IDLE
     if (status === "ON_THE_WAY") {
       // Show all riders except self first, then add self on top
-      const selfId = localStorage.getItem("userId");
       const others = riders.filter((r) => r.userId !== selfId);
       const self = riders.find((r) => r.userId === selfId);
       others.forEach((r) => {
-        m.push({ lat: r.lat, lng: r.lng, label: `🚲 ${r.displayName}`, color: "#00e87b" });
+        const name = (r.displayName && r.displayName !== "undefined") ? r.displayName : "Rider";
+        m.push({ lat: r.lat, lng: r.lng, label: `🚲 ${name}`, color: "#00e87b" });
       });
-      if (self) m.push({ lat: self.lat, lng: self.lng, label: `⭐ KAMU: ${self.displayName}`, color: "#00e87b" });
+      if (self) {
+        const myName = (self.displayName && self.displayName !== "undefined") ? self.displayName : (selfStoredName || "Kamu");
+        m.push({ lat: self.lat, lng: self.lng, label: `⭐ KAMU: ${myName}`, color: "#00e87b" });
+      }
     } else {
       riders.forEach((r) => {
-        m.push({ lat: r.lat, lng: r.lng, label: `🚲 ${r.displayName}`, color: "#00e87b" });
+        const isSelf = r.userId === selfId;
+        const name = (r.displayName && r.displayName !== "undefined")
+          ? r.displayName
+          : (isSelf ? (selfStoredName || "Kamu") : "Rider");
+        const label = isSelf ? `⭐ KAMU: ${name}` : `🚲 ${name}`;
+        m.push({ lat: r.lat, lng: r.lng, label, color: "#00e87b" });
       });
     }
     return m;
@@ -314,8 +349,12 @@ export default function LiveMapPage() {
                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-                        {r.userId === localStorage.getItem("userId") && "⭐ "}
-                        {r.displayName}
+                        {typeof window !== "undefined" && r.userId === localStorage.getItem("userId") && "⭐ "}
+                        {(r.displayName && r.displayName !== "undefined")
+                          ? r.displayName
+                          : (typeof window !== "undefined" && r.userId === localStorage.getItem("userId")
+                            ? localStorage.getItem("displayName") || "Kamu"
+                            : "Rider")}
                       </span>
                       <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>
                         {new Date(r.updatedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}

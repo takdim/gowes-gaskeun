@@ -41,15 +41,18 @@ export default function RegisterPage() {
       });
 
       if (!res.ok) {
-        const data = await res.json();
-        setError(data.error || "Registrasi gagal");
+        const errorData = await res.json().catch(() => ({}));
+        setError(errorData.error || "Registrasi gagal");
         setLoading(false);
         return;
       }
 
+      const data = await res.json().catch(() => ({}));
       // Auto-login after registration
-      localStorage.setItem("token", "registered");
-      localStorage.setItem("userId", "new_user");
+      localStorage.setItem("token", data.token || "registered");
+      localStorage.setItem("userId", data.id || "new_user");
+      localStorage.setItem("role", data.role || "USER");
+      localStorage.setItem("displayName", data.displayName || form.displayName);
       router.push("/dashboard");
     } catch {
       setError("Terjadi kesalahan koneksi");
