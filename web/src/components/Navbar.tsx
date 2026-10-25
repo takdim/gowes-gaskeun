@@ -64,6 +64,7 @@ export default function Navbar() {
     { href: "/event", label: "Event" },
     { href: "/tikum", label: "Tikum" },
     { href: "/live", label: "Live Map" },
+    { href: "/dashboard", label: "Aktivitas" },
     ...(isAdmin ? [{ href: "/admin", label: "Admin" }] as any : []),
   ];
 

@@ -86,6 +86,26 @@ def api_get_profile():
         db.close()
 
 
+@user_bp.route("/users/<user_id>", methods=["GET"])
+@require_db
+def api_get_public_user(user_id):
+    """Ambil data profil publik pengguna lain (nama, avatar, role, tanggal gabung)."""
+    db = SessionLocal()
+    try:
+        user = db.query(UserModel).get(user_id)
+        if not user:
+            return jsonify({"error": "User tidak ditemukan"}), 404
+        return jsonify({
+            "id": user.id,
+            "displayName": user.display_name,
+            "avatarUrl": user.avatar_url,
+            "role": user.role,
+            "createdAt": user.created_at.isoformat(),
+        })
+    finally:
+        db.close()
+
+
 @user_bp.route("/users/profile", methods=["PUT"])
 @require_db
 @require_auth

@@ -137,3 +137,38 @@ class TikumMessageModel(Base):
     tikum = relationship("TikumModel", back_populates="messages")
     user = relationship("UserModel", back_populates="tikum_messages")
 
+
+class ActivityModel(Base):
+    __tablename__ = "activities"
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(String(255), ForeignKey("events.id", ondelete="SET NULL"), nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    notes = Column(Text, nullable=True)
+    distance_km = Column(Float, nullable=False, default=0.0)
+    duration_seconds = Column(Integer, nullable=False, default=0)
+    avg_speed = Column(Float, nullable=False, default=0.0)
+    max_speed = Column(Float, nullable=True, default=0.0)
+    avg_pace = Column(String(50), nullable=True)
+    calories = Column(Integer, nullable=True, default=0)
+    route_coordinates = Column(Text, nullable=True)  # JSON [[lat, lng], ...]
+    photos = Column(Text, nullable=True)  # JSON [url, ...]
+    kudos_count = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("UserModel", backref="activities")
+    event = relationship("EventModel", backref="activities")
+    kudos = relationship("ActivityKudoModel", back_populates="activity", cascade="all, delete-orphan")
+
+
+class ActivityKudoModel(Base):
+    __tablename__ = "activity_kudos"
+    id = Column(String(255), primary_key=True, default=lambda: str(uuid.uuid4()))
+    activity_id = Column(String(255), ForeignKey("activities.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(String(255), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    activity = relationship("ActivityModel", back_populates="kudos")
+    user = relationship("UserModel", backref="activity_kudos")
+

@@ -9,10 +9,32 @@ interface MarkerItem {
   color?: string;
 }
 
-export default function MapComponent({ markers = [], center = [-5.1486, 119.4390], zoom = 14, showLegend = false }: { markers?: MarkerItem[]; center?: [number, number]; zoom?: number; showLegend?: boolean }) {
+interface MapComponentProps {
+  markers?: MarkerItem[];
+  center?: [number, number];
+  zoom?: number;
+  showLegend?: boolean;
+  polyline?: [number, number][];
+  polylineColor?: string;
+  height?: string;
+  interactive?: boolean;
+}
+
+export default function MapComponent({
+  markers = [],
+  center = [-5.1486, 119.4390],
+  zoom = 14,
+  showLegend = false,
+  polyline = [],
+  polylineColor = "#00e87b",
+  height = "100%",
+  interactive = true,
+}: MapComponentProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRefs = useRef<any[]>([]);
+  const polylineRef = useRef<any>(null);
+  const startEndMarkerRefs = useRef<any[]>([]);
   const didFitRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,8 +74,12 @@ export default function MapComponent({ markers = [], center = [-5.1486, 119.4390
     const map = L.map(containerRef.current, {
       center: [center[0], center[1]],
       zoom,
-      zoomControl: true,
+      zoomControl: interactive,
       attributionControl: false,
+      dragging: interactive,
+      touchZoom: interactive,
+      scrollWheelZoom: interactive ? "center" : false,
+      doubleClickZoom: interactive,
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -66,7 +92,59 @@ export default function MapComponent({ markers = [], center = [-5.1486, 119.4390
       map.remove();
       mapRef.current = null;
     };
-  }, [JSON.stringify(center), zoom]);
+  }, [JSON.stringify(center), zoom, interactive]);
+
+  // Update polyline if provided
+  useEffect(() => {
+    if (!mapRef.current) return;
+    const L = (window as any).L;
+    if (!L) return;
+
+    if (polylineRef.current) {
+      polylineRef.current.remove();
+      polylineRef.current = null;
+    }
+    startEndMarkerRefs.current.forEach((m) => m.remove());
+    startEndMarkerRefs.current = [];
+
+    if (polyline && polyline.length > 1) {
+      const line = L.polyline(polyline, {
+        color: polylineColor,
+        weight: 4,
+        opacity: 0.9,
+        lineJoin: "round",
+        lineCap: "round",
+      }).addTo(mapRef.current);
+
+      polylineRef.current = line;
+
+      // Start circle marker
+      const startPos = polyline[0];
+      const startMarker = L.circleMarker(startPos, {
+        radius: 6,
+        fillColor: "#00e87b",
+        color: "#ffffff",
+        weight: 2,
+        fillOpacity: 1,
+      }).addTo(mapRef.current).bindPopup("Titik Awal");
+
+      // End circle marker
+      const endPos = polyline[polyline.length - 1];
+      const endMarker = L.circleMarker(endPos, {
+        radius: 6,
+        fillColor: "#f43f5e",
+        color: "#ffffff",
+        weight: 2,
+        fillOpacity: 1,
+      }).addTo(mapRef.current).bindPopup("Titik Selesai");
+
+      startEndMarkerRefs.current = [startMarker, endMarker];
+
+      try {
+        mapRef.current.fitBounds(line.getBounds(), { padding: [25, 25], maxZoom: 16 });
+      } catch {}
+    }
+  }, [JSON.stringify(polyline), polylineColor]);
 
   // Update markers
   useEffect(() => {
@@ -89,7 +167,7 @@ export default function MapComponent({ markers = [], center = [-5.1486, 119.4390
       bounds.push(pos);
     });
 
-    if (bounds.length > 0 && !didFitRef.current) {
+    if (bounds.length > 0 && (!polyline || polyline.length === 0) && !didFitRef.current) {
       mapRef.current.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
       didFitRef.current = true;
     }
@@ -98,7 +176,7 @@ export default function MapComponent({ markers = [], center = [-5.1486, 119.4390
   if (error) {
     return (
       <div ref={containerRef} style={{
-        width: "100%", height: "100%", minHeight: "300px",
+        width: "100%", height, minHeight: height === "100%" ? "260px" : height,
         background: "rgba(244,63,94,0.1)", borderRadius: "24px",
         display: "flex", alignItems: "center", justifyContent: "center",
         flexDirection: "column", gap: "0.5rem"
@@ -116,7 +194,7 @@ export default function MapComponent({ markers = [], center = [-5.1486, 119.4390
 
   return (
     <>
-      <div ref={containerRef} style={{ width: "100%", height: "100%", minHeight: "300px" }} />
+      <div ref={containerRef} style={{ width: "100%", height, minHeight: height === "100%" ? "260px" : height, borderRadius: "inherit" }} />
       {showLegend && (
         <div style={{ padding: "0.75rem 1rem", display: "flex", flexWrap: "wrap", gap: "1rem", fontSize: "0.8rem", color: "var(--color-text-secondary)" }}>
           <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>

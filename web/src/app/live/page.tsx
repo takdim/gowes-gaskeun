@@ -36,6 +36,22 @@ export default function LiveMapPage() {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const eventId = event?.event?.id;
 
+  // Session route tracking for profile activity log
+  const sessionRouteRef = useRef<[number, number][]>([]);
+  const sessionStartTimeRef = useRef<number | null>(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [saveTitle, setSaveTitle] = useState("");
+  const [saveNotes, setSaveNotes] = useState("");
+  const [savePhotoUrl, setSavePhotoUrl] = useState("");
+  const [savingActivity, setSavingActivity] = useState(false);
+  const [summaryStats, setSummaryStats] = useState<{
+    distanceKm: number;
+    durationSeconds: number;
+    avgSpeed: number;
+    avgPace: string;
+    coords: [number, number][];
+  } | null>(null);
+
   // Load event data
   useEffect(() => {
     fetch(`${API_BASE}/api/events/featured`)
@@ -99,6 +115,14 @@ export default function LiveMapPage() {
   const sendPositionUpdate = (pos: GeolocationPosition, currentEventId: string) => {
     const selfId = typeof window !== "undefined" ? localStorage.getItem("userId") : null;
     const selfName = (typeof window !== "undefined" ? localStorage.getItem("displayName") : null) || "Kamu";
+
+    // Record coordinate to session route
+    const lat = pos.coords.latitude;
+    const lng = pos.coords.longitude;
+    const last = sessionRouteRef.current[sessionRouteRef.current.length - 1];
+    if (!last || Math.abs(last[0] - lat) > 0.0001 || Math.abs(last[1] - lng) > 0.0001) {
+      sessionRouteRef.current.push([lat, lng]);
+    }
 
     setRiders((prev) => {
       const idx = prev.findIndex((r) => r.userId === selfId);
@@ -195,7 +219,6 @@ export default function LiveMapPage() {
     } catch {}
 
     try {
-      // Start API tracking
       const response = await fetch(`${API_BASE}/api/live/start`, {
         method: "POST",
         headers: {
@@ -214,6 +237,8 @@ export default function LiveMapPage() {
       console.error("Failed to start tracking");
     }
 
+    sessionRouteRef.current = [];
+    sessionStartTimeRef.current = Date.now();
     setStatus("ON_THE_WAY");
     setErrorMsg("");
 
@@ -256,7 +281,6 @@ export default function LiveMapPage() {
         body: JSON.stringify({ eventId }),
       });
 
-      // Refetch riders from backend to make sure self is removed
       const res = await fetch(`${API_BASE}/api/live/riders?event_id=${eventId}`);
       if (res.ok) {
         const data = await res.json();
@@ -264,6 +288,91 @@ export default function LiveMapPage() {
       }
     } catch {
       console.error("Failed to stop tracking");
+    }
+
+    // Telemetry summary calculation from actual GPS session
+    const points = [...sessionRouteRef.current];
+    let distKm = 0;
+
+    if (points.length >= 2) {
+      for (let i = 0; i < points.length - 1; i++) {
+        const [lat1, lon1] = points[i];
+        const [lat2, lon2] = points[i + 1];
+        const R = 6371;
+        const dLat = ((lat2 - lat1) * Math.PI) / 180;
+        const dLon = ((lon2 - lon1) * Math.PI) / 180;
+        const a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+        distKm += R * c;
+      }
+      distKm = Math.round(distKm * 100) / 100;
+    }
+
+    const durationSec = sessionStartTimeRef.current
+      ? Math.max(1, Math.round((Date.now() - sessionStartTimeRef.current) / 1000))
+      : 60;
+
+    const hours = durationSec / 3600;
+    const avgSpd = distKm > 0 && hours > 0 ? Math.round((distKm / hours) * 10) / 10 : 0.0;
+
+    let avgPace = "0:00 /km";
+    if (distKm > 0) {
+      const paceTotalSec = durationSec / distKm;
+      const pMin = Math.floor(paceTotalSec / 60);
+      const pSec = Math.round(paceTotalSec % 60);
+      avgPace = `${pMin}:${pSec < 10 ? "0" : ""}${pSec} /km`;
+    }
+
+    setSummaryStats({
+      distanceKm: distKm,
+      durationSeconds: durationSec,
+      avgSpeed: avgSpd,
+      avgPace: avgPace,
+      coords: points,
+    });
+    setSaveTitle(distKm > 0 ? `Gowes Makassar (${distKm} km)` : "Gowes Makassar");
+    setShowSaveModal(true);
+  };
+
+  const handleSaveToProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!summaryStats) return;
+    setSavingActivity(true);
+
+    try {
+      const res = await fetch(`${API_BASE}/api/activities`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("token")}`,
+          "X-User-Id": localStorage.getItem("userId") || "",
+        },
+        body: JSON.stringify({
+          title: saveTitle.trim() || `Gowes Makassar #${new Date().toLocaleDateString("id-ID")}`,
+          notes: saveNotes.trim(),
+          distance_km: summaryStats.distanceKm,
+          duration_seconds: summaryStats.durationSeconds,
+          avg_speed: summaryStats.avgSpeed,
+          avg_pace: summaryStats.avgPace,
+          route_coordinates: summaryStats.coords,
+          photos: savePhotoUrl.trim() ? [savePhotoUrl.trim()] : [],
+          eventId: eventId || null,
+        }),
+      });
+
+      if (res.ok) {
+        setShowSaveModal(false);
+        window.location.href = "/dashboard";
+      }
+    } catch {
+      setErrorMsg("Gagal menyimpan aktivitas.");
+    } finally {
+      setSavingActivity(false);
     }
   };
 
@@ -407,14 +516,20 @@ export default function LiveMapPage() {
                        onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(255,255,255,0.04)")}
                        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                      <Link
+                        href={`/profile/${r.userId}`}
+                        style={{ fontWeight: 600, fontSize: "0.9rem", color: "inherit", textDecoration: "none" }}
+                        className="hover:text-green-400 transition-colors"
+                        title="Lihat profil & aktivitas pesepeda"
+                      >
                         {typeof window !== "undefined" && r.userId === localStorage.getItem("userId") && "⭐ "}
                         {(r.displayName && r.displayName !== "undefined")
                           ? r.displayName
                           : (typeof window !== "undefined" && r.userId === localStorage.getItem("userId")
                             ? localStorage.getItem("displayName") || "Kamu"
                             : "Rider")}
-                      </span>
+                        <span style={{ fontSize: "0.75rem", color: "var(--color-green-neon)", marginLeft: "0.25rem" }}>↗</span>
+                      </Link>
                       <span style={{ fontSize: "0.75rem", color: "var(--color-text-tertiary)" }}>
                         {new Date(r.updatedAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
                       </span>
@@ -448,6 +563,147 @@ export default function LiveMapPage() {
           }
         `}</style>
       </div>
+
+      {/* Save Ride Modal (Adidas Running / Strava style) */}
+      {showSaveModal && summaryStats && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: "rgba(0,0,0,0.8)",
+            backdropFilter: "blur(20px)",
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "1rem",
+          }}
+          onClick={() => setShowSaveModal(false)}
+        >
+          <div
+            className="glass-panel-lg p-6 max-w-lg w-full"
+            style={{ maxHeight: "90vh", overflowY: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-3">
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: "1.5rem" }}>🎉</span>
+                <h3 className="text-xl font-bold">Gowes Selesai!</h3>
+              </div>
+              <button
+                onClick={() => setShowSaveModal(false)}
+                style={{ background: "none", border: "none", color: "var(--color-text-tertiary)", fontSize: "1.2rem", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+            <p style={{ color: "var(--color-text-secondary)", fontSize: "0.85rem", marginBottom: "1.25rem" }}>
+              Kerja bagus! Perjalananmu telah direkam. Simpan dan bagikan ke feed profil komunitasmu.
+            </p>
+
+            {/* Quick Telemetry Box */}
+            <div
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "16px",
+                padding: "0.85rem 1rem",
+                marginBottom: "1.25rem",
+              }}
+              className="grid grid-cols-3 gap-2 text-center"
+            >
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase" }}>Jarak</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--color-green-neon)" }}>
+                  {summaryStats.distanceKm} <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>km</span>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase" }}>Avg Pace</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "var(--color-purple-tikum)" }}>
+                  {summaryStats.avgPace}
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase" }}>Avg Speed</div>
+                <div style={{ fontSize: "1.3rem", fontWeight: 800, color: "#ffffff" }}>
+                  {summaryStats.avgSpeed} <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>km/h</span>
+                </div>
+              </div>
+            </div>
+
+            <form onSubmit={handleSaveToProfile} className="space-y-4">
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "block", marginBottom: "0.35rem" }}>
+                  Judul Perjalanan
+                </label>
+                <input
+                  value={saveTitle}
+                  onChange={(e) => setSaveTitle(e.target.value)}
+                  placeholder="Judul aktivitas gowes"
+                  className="input-glass w-full"
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "block", marginBottom: "0.35rem" }}>
+                  Foto Perjalanan (URL Foto Opsional)
+                </label>
+                <input
+                  value={savePhotoUrl}
+                  onChange={(e) => setSavePhotoUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="input-glass w-full"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.8rem", color: "var(--color-text-secondary)", display: "block", marginBottom: "0.35rem" }}>
+                  Catatan / Cerita Keseruan
+                </label>
+                <textarea
+                  value={saveNotes}
+                  onChange={(e) => setSaveNotes(e.target.value)}
+                  placeholder="Tuliskan pengalaman di jalan, tantangan, atau spot kopi..."
+                  className="input-glass w-full"
+                  rows={3}
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSaveModal(false)}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--color-text-tertiary)",
+                    padding: "0.6rem 1rem",
+                    cursor: "pointer",
+                    fontSize: "0.85rem",
+                  }}
+                >
+                  Lewati
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingActivity}
+                  className="btn-glass-primary"
+                  style={{ padding: "0.6rem 1.5rem", fontSize: "0.85rem" }}
+                >
+                  {savingActivity ? "Menyimpan..." : "Posting ke Profil 🚀"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
