@@ -22,6 +22,85 @@ interface Rider {
   updatedAt: string;
 }
 
+// Session route persistence helpers
+const getSessionStorageKey = (eid?: string) => {
+  const userId = typeof window !== "undefined" ? localStorage.getItem("userId") : "";
+  return `gowes_live_session_${eid || "default"}_${userId || "anon"}`;
+};
+
+interface LiveSavedSession {
+  eventId: string;
+  startTime: number;
+  route: [number, number][];
+}
+
+const loadSavedSession = (eid?: string): LiveSavedSession | null => {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(getSessionStorageKey(eid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && Array.isArray(parsed.route)) {
+      return parsed as LiveSavedSession;
+    }
+  } catch (err) {
+    console.error("Failed to parse saved live session:", err);
+  }
+  return null;
+};
+
+const persistSession = (eid?: string, startTime?: number | null, route?: [number, number][]) => {
+  if (typeof window === "undefined" || !startTime) return;
+  try {
+    const data: LiveSavedSession = {
+      eventId: eid || "default",
+      startTime,
+      route: route || [],
+    };
+    localStorage.setItem(getSessionStorageKey(eid), JSON.stringify(data));
+  } catch (err) {
+    console.error("Failed to persist live session:", err);
+  }
+};
+
+const clearSavedSession = (eid?: string) => {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(getSessionStorageKey(eid));
+  } catch {}
+};
+
+const calculateDistanceKm = (points: [number, number][]) => {
+  if (points.length < 2) return 0;
+  let dist = 0;
+  for (let i = 0; i < points.length - 1; i++) {
+    const [lat1, lon1] = points[i];
+    const [lat2, lon2] = points[i + 1];
+    const R = 6371;
+    const dLat = ((lat2 - lat1) * Math.PI) / 180;
+    const dLon = ((lon2 - lon1) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    dist += R * c;
+  }
+  return Math.round(dist * 100) / 100;
+};
+
+const formatTimer = (totalSec: number) => {
+  const hrs = Math.floor(totalSec / 3600);
+  const mins = Math.floor((totalSec % 3600) / 60);
+  const secs = totalSec % 60;
+  if (hrs > 0) {
+    return `${hrs}:${mins < 10 ? "0" : ""}${mins}:${secs < 10 ? "0" : ""}${secs}`;
+  }
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+};
+
 export default function LiveMapPage() {
   const [event, setEvent] = useState<any>(null);
   const [riders, setRiders] = useState<Rider[]>([]);
@@ -36,9 +115,13 @@ export default function LiveMapPage() {
   const mapInstanceRef = useRef<L.Map | null>(null);
   const eventId = event?.event?.id;
 
-  // Session route tracking for profile activity log
+  // Session route tracking for profile activity log (persisted in localStorage across tab/browser reload)
   const sessionRouteRef = useRef<[number, number][]>([]);
   const sessionStartTimeRef = useRef<number | null>(null);
+  const [liveRoute, setLiveRoute] = useState<[number, number][]>([]);
+  const [sessionRestoredNotice, setSessionRestoredNotice] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [saveTitle, setSaveTitle] = useState("");
   const [saveNotes, setSaveNotes] = useState("");
@@ -51,6 +134,22 @@ export default function LiveMapPage() {
     avgPace: string;
     coords: [number, number][];
   } | null>(null);
+
+  // Stopwatch timer when riding
+  useEffect(() => {
+    if (status !== "ON_THE_WAY") {
+      setElapsedSeconds(0);
+      return;
+    }
+    const updateTimer = () => {
+      if (sessionStartTimeRef.current) {
+        setElapsedSeconds(Math.max(0, Math.floor((Date.now() - sessionStartTimeRef.current) / 1000)));
+      }
+    };
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [status]);
 
   // Load event data
   useEffect(() => {
@@ -122,6 +221,8 @@ export default function LiveMapPage() {
     const last = sessionRouteRef.current[sessionRouteRef.current.length - 1];
     if (!last || Math.abs(last[0] - lat) > 0.0001 || Math.abs(last[1] - lng) > 0.0001) {
       sessionRouteRef.current.push([lat, lng]);
+      setLiveRoute([...sessionRouteRef.current]);
+      persistSession(currentEventId, sessionStartTimeRef.current, sessionRouteRef.current);
     }
 
     setRiders((prev) => {
@@ -181,6 +282,25 @@ export default function LiveMapPage() {
         if (myAtt) {
           if (myAtt.status === "ON_THE_WAY") {
             setStatus("ON_THE_WAY");
+
+            // Restore previously recorded session if browser was closed or refreshed
+            const saved = loadSavedSession(eventId);
+            if (saved && saved.startTime) {
+              sessionStartTimeRef.current = saved.startTime;
+              sessionRouteRef.current = saved.route || [];
+              setLiveRoute(saved.route || []);
+              if (saved.route && saved.route.length > 0) {
+                setSessionRestoredNotice(
+                  `Progress rute (${saved.route.length} titik) & timer gowes berhasil dipulihkan.`
+                );
+              }
+            } else {
+              sessionStartTimeRef.current = Date.now();
+              sessionRouteRef.current = [];
+              setLiveRoute([]);
+              persistSession(eventId, sessionStartTimeRef.current, []);
+            }
+
             if (navigator.geolocation && watchRef.current === null) {
               const id = navigator.geolocation.watchPosition(
                 (pos) => sendPositionUpdate(pos, eventId),
@@ -192,6 +312,7 @@ export default function LiveMapPage() {
             }
           } else if (myAtt.status === "FINISHED") {
             setStatus("FINISHED");
+            clearSavedSession(eventId);
           }
         }
       })
@@ -239,6 +360,9 @@ export default function LiveMapPage() {
 
     sessionRouteRef.current = [];
     sessionStartTimeRef.current = Date.now();
+    setLiveRoute([]);
+    setSessionRestoredNotice(null);
+    persistSession(eventId, sessionStartTimeRef.current, []);
     setStatus("ON_THE_WAY");
     setErrorMsg("");
 
@@ -366,6 +490,7 @@ export default function LiveMapPage() {
       });
 
       if (res.ok) {
+        clearSavedSession(eventId);
         setShowSaveModal(false);
         window.location.href = "/dashboard";
       }
@@ -488,6 +613,72 @@ export default function LiveMapPage() {
             )}
           </div>
 
+          {/* Live Telemetry HUD when ON_THE_WAY */}
+          {status === "ON_THE_WAY" && (
+            <div
+              className="glass-panel p-4 mt-3"
+              style={{
+                border: "1px solid rgba(0, 232, 123, 0.35)",
+                background: "linear-gradient(135deg, rgba(0,232,123,0.08) 0%, rgba(13,17,23,0.85) 100%)",
+                boxShadow: "0 8px 32px rgba(0,232,123,0.1)",
+              }}
+            >
+              {sessionRestoredNotice && (
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "0.5rem 0.75rem",
+                    background: "rgba(0,232,123,0.15)",
+                    border: "1px solid rgba(0,232,123,0.3)",
+                    borderRadius: "10px",
+                    marginBottom: "0.75rem",
+                    fontSize: "0.8rem",
+                    color: "var(--color-green-neon)",
+                  }}
+                >
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+                    <span>🔄</span>
+                    <span>{sessionRestoredNotice}</span>
+                  </span>
+                  <button
+                    onClick={() => setSessionRestoredNotice(null)}
+                    style={{ background: "none", border: "none", color: "inherit", cursor: "pointer", fontSize: "0.85rem", padding: "0 0.25rem" }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem", textAlign: "center" }}>
+                <div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Waktu Aktif</div>
+                  <div style={{ fontSize: "1.3rem", fontWeight: 700, fontFamily: "var(--font-heading)", color: "#ffffff", marginTop: "0.2rem" }}>
+                    ⏱ {formatTimer(elapsedSeconds)}
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Jarak Tempuh</div>
+                  <div style={{ fontSize: "1.3rem", fontWeight: 700, fontFamily: "var(--font-heading)", color: "var(--color-green-neon)", marginTop: "0.2rem" }}>
+                    {calculateDistanceKm(liveRoute)} <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>km</span>
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "0.7rem", color: "var(--color-text-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em" }}>Rute Tersimpan</div>
+                  <div style={{ fontSize: "1.3rem", fontWeight: 700, fontFamily: "var(--font-heading)", color: "#a78bfa", marginTop: "0.2rem" }}>
+                    {liveRoute.length} <span style={{ fontSize: "0.75rem", fontWeight: 500 }}>titik</span>
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginTop: "0.6rem", fontSize: "0.75rem", color: "var(--color-text-tertiary)", textAlign: "center", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.35rem" }}>
+                <span style={{ color: "var(--color-green-neon)" }}>●</span>
+                <span>Progres tersimpan otomatis di perangkat. Jika browser tertutup atau direfresh, rute akan otomatis berlanjut.</span>
+              </div>
+            </div>
+          )}
+
           {/* Error message */}
           {errorMsg && (
             <div style={{ background: "rgba(244,63,94,0.1)", border: "1px solid rgba(244,63,94,0.2)", borderRadius: "12px", padding: "0.75rem", marginTop: "0.75rem", fontSize: "0.9rem" }}>
@@ -547,7 +738,13 @@ export default function LiveMapPage() {
 
           {/* Map */}
           <div style={{ height: "60vh", margin: "1rem 1rem 1rem 0", borderRadius: "24px", overflow: "hidden" }}>
-            <MapComponent markers={allMarkers as any} center={event?.start ? [event.start.lat, event.start.lng] : [-5.1486, 119.4390]} showLegend />
+            <MapComponent
+              markers={allMarkers as any}
+              center={event?.start ? [event.start.lat, event.start.lng] : [-5.1486, 119.4390]}
+              polyline={status === "ON_THE_WAY" && liveRoute.length >= 2 ? liveRoute : undefined}
+              autoFitPolyline={false}
+              showLegend
+            />
           </div>
         </div>
 
@@ -679,7 +876,10 @@ export default function LiveMapPage() {
               <div className="pt-2 flex justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setShowSaveModal(false)}
+                  onClick={() => {
+                    clearSavedSession(eventId);
+                    setShowSaveModal(false);
+                  }}
                   style={{
                     background: "transparent",
                     border: "none",

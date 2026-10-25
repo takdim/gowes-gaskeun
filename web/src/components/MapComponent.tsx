@@ -16,6 +16,7 @@ interface MapComponentProps {
   showLegend?: boolean;
   polyline?: [number, number][];
   polylineColor?: string;
+  autoFitPolyline?: boolean;
   height?: string;
   interactive?: boolean;
 }
@@ -27,6 +28,7 @@ export default function MapComponent({
   showLegend = false,
   polyline = [],
   polylineColor = "#00e87b",
+  autoFitPolyline = true,
   height = "100%",
   interactive = true,
 }: MapComponentProps) {
@@ -84,6 +86,7 @@ export default function MapComponent({
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
       maxZoom: 19,
+      attribution: false,
     }).addTo(map);
 
     mapRef.current = map;
@@ -140,11 +143,13 @@ export default function MapComponent({
 
       startEndMarkerRefs.current = [startMarker, endMarker];
 
-      try {
-        mapRef.current.fitBounds(line.getBounds(), { padding: [25, 25], maxZoom: 16 });
-      } catch {}
+      if (autoFitPolyline) {
+        try {
+          mapRef.current.fitBounds(line.getBounds(), { padding: [25, 25], maxZoom: 16 });
+        } catch {}
+      }
     }
-  }, [JSON.stringify(polyline), polylineColor]);
+  }, [JSON.stringify(polyline), polylineColor, autoFitPolyline]);
 
   // Update markers
   useEffect(() => {
@@ -209,12 +214,37 @@ export default function MapComponent({
         </div>
       )}
       <style>{`
+        .leaflet-popup-content-wrapper {
+          background: rgba(18, 18, 26, 0.88) !important;
+          backdrop-filter: blur(20px) !important;
+          -webkit-backdrop-filter: blur(20px) !important;
+          border: 1px solid rgba(255, 255, 255, 0.15) !important;
+          border-radius: 14px !important;
+          color: #f1f5f9 !important;
+          box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6) !important;
+        }
+        .leaflet-popup-tip {
+          background: rgba(18, 18, 26, 0.88) !important;
+        }
+        .leaflet-popup-content {
+          margin: 10px 14px !important;
+          font-size: 0.85rem !important;
+          line-height: 1.4 !important;
+        }
+        .leaflet-popup-close-button {
+          color: rgba(255, 255, 255, 0.6) !important;
+          padding: 6px 8px !important;
+        }
+        .leaflet-popup-close-button:hover {
+          color: #ffffff !important;
+        }
         .leaflet-control-zoom { border: none !important; }
         .leaflet-control-zoom a {
-          background: rgba(255,255,255,0.1) !important;
-          backdrop-filter: blur(10px) !important;
+          background: rgba(255, 255, 255, 0.08) !important;
+          backdrop-filter: blur(12px) !important;
+          -webkit-backdrop-filter: blur(12px) !important;
           color: white !important;
-          border: 1px solid rgba(255,255,255,0.15) !important;
+          border: 1px solid rgba(255, 255, 255, 0.12) !important;
           border-radius: 8px !important;
           width: 32px !important;
           height: 32px !important;
@@ -222,7 +252,7 @@ export default function MapComponent({
           font-size: 16px !important;
         }
         .leaflet-control-zoom a:hover {
-          background: rgba(255,255,255,0.15) !important;
+          background: rgba(255, 255, 255, 0.18) !important;
         }
       `}</style>
     </>
