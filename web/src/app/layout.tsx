@@ -15,8 +15,15 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Gowes Gaskeun — Critical Mass Makassar",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "https://gowes-gaskeun.aaaiiimmm.dev"),
+  title: {
+    default: "Gowes Gaskeun — Critical Mass Makassar",
+    template: "%s | Gowes Gaskeun",
+  },
   description: "Komunitas pesepeda Makassar. Bergerak Bersama, Merayakan Kota.",
+  keywords: ["gowes", "makassar", "critical mass", "sepeda makassar", "komunitas sepeda", "gowes gaskeun"],
+  authors: [{ name: "Gowes Gaskeun" }],
+  creator: "Gowes Gaskeun",
   icons: {
     icon: [
       { url: "/favicon.ico" },
@@ -24,6 +31,39 @@ export const metadata: Metadata = {
     ],
     shortcut: "/favicon.ico",
     apple: "/logo.png",
+  },
+  openGraph: {
+    title: "Gowes Gaskeun — Critical Mass Makassar",
+    description: "Komunitas pesepeda Makassar. Bergerak Bersama, Merayakan Kota.",
+    url: "https://gowes-gaskeun.aaaiiimmm.dev",
+    siteName: "Gowes Gaskeun",
+    images: [
+      {
+        url: "/logo.png",
+        width: 512,
+        height: 512,
+        alt: "Gowes Gaskeun Logo",
+      },
+    ],
+    locale: "id_ID",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Gowes Gaskeun — Critical Mass Makassar",
+    description: "Komunitas pesepeda Makassar. Bergerak Bersama, Merayakan Kota.",
+    images: ["/logo.png"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
   },
 };
 
